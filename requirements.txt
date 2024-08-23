@@ -1,0 +1,6 @@
+pandas==2.0.3
+numpy==1.25.1
+plotly==5.15.0
+matplotlib==3.9.2
+numba==0.57.1
+seaborn==0.13.2

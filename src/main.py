@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
-from typing import Dict
+import os
+from typing import Dict, Tuple
+from numba import jit
 
 
 def generate_columns() -> Dict[str, type]:
@@ -25,66 +27,52 @@ def generate_columns() -> Dict[str, type]:
     return columns
 
 
-df: pd.DataFrame = pd.read_csv("./WEC_Perth_49.csv", dtype=generate_columns())
+path = os.path.join("..", "data", "WEC_Perth_49.csv")
+df: pd.DataFrame = pd.read_csv(path, dtype=generate_columns())
 
-X: pd.Series = df.drop(["Total_Power"], axis=1)
-y: pd.Series = df["Total_Power"]
+X = df.drop(["Total_Power"], axis=1)
+y = df["Total_Power"]
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
+print(f"X shape: {X.shape} and y shape: {y.shape}")
 
-scaler: StandardScaler = StandardScaler()
-features_scaled: np.ndarray = scaler.fit_transform(X)
+# Dropping positional columns
+X = X.drop(X.columns[X.columns.str.contains("X")], axis=1)
+X = X.drop(X.columns[X.columns.str.contains("Y")], axis=1)
 
-pca: PCA = PCA(random_state=42)
-pca_result: np.ndarray = pca.fit_transform(features_scaled)
-
-cumulative_variance_ratio: np.ndarray = np.cumsum(pca.explained_variance_ratio_)
-n_components_95: int = np.argmax(cumulative_variance_ratio >= 0.95) + 1
-
-df_pca: pd.DataFrame = pd.DataFrame(
-    pca_result[:, :n_components_95],
-    columns=[f"PC{i+1}" for i in range(n_components_95)],
-)
-
-df_pca["Total_Power"] = y
-
-X_pca = df_pca.drop(["Total_Power"], axis=1)
-y_pca = df_pca["Total_Power"]
-
-from numba import jit
-from typing import Tuple
+print("Removed positional columns")
+print(f"X shape: {X.shape} and y shape: {y.shape}")
 
 
+# Linear Regression
 @jit(nopython=True)
 def mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
-    Calculates the mean squared error between the true and predicted values
-    of a dataset.
+    Calculates the Mean Squared Error between the true and predicted values
 
     Args:
-        y_true (np.ndarray): The true values of the dataset
-        y_pred (np.ndarray): The predicted values of the dataset
+      y_true (np.ndarray): The true values
+      y_pred (np.ndarray): The predicted values
 
     Returns:
-        float: The mean squared error between the true and predicted values
+      float: The Mean Squared Error
     """
 
     return (1 / len(y_true)) * np.sum((y_true - y_pred) ** 2)
 
 
 @jit(nopython=True)
-def r2(y_true: np.ndarray, y_pred: np.ndarray) -> np.float64:
+def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
-    Calculates the R^2 score between the true and predicted values of a dataset.
+    Calculates the R^2 score between the true and predicted values
 
     Args:
-        y_true (np.ndarray): The true values of the dataset
-        y_pred (np.ndarray): The predicted values of the dataset
+      y_true (np.ndarray): The true values
+      y_pred (np.ndarray): The predicted values
 
     Returns:
-        float: The R^2 score between the true and predicted values
+      float: The R^2 score
     """
+
     ss_res = np.sum((y_true - y_pred) ** 2)
     ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
 
@@ -125,56 +113,122 @@ def gradient_descent(
     return theta, loss
 
 
-from sklearn.model_selection import train_test_split
+def split_dataset(
+    X: np.ndarray,
+    y: np.ndarray,
+    train_ratio: float = 0.6,
+    val_ratio: float = 0.2,
+    test_ratio: float = 0.2,
+    random_state: int = 42,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Splits the dataset into training, validation, and testing sets based on the
+    provided ratios.
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_pca, y_pca, test_size=0.2, random_state=42, shuffle=True
+    Args:
+        X (np.ndarray): The input features of the dataset
+        y (np.ndarray): The true values of the dataset
+        train_ratio (float, optional): The ratio of the training set.
+                                       Defaults  to 0.6.
+        val_ratio (float, optional): The ratio of the validation set.
+                                     Defaults to 0.2.
+        test_ratio (float, optional): The ratio of the testing set.
+                                      Defaults to 0.2.
+        random_state (int, optional): The random seed for reproducibility.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: The training, validation, and testing sets for X and y
+    """
+    assert train_ratio + val_ratio + test_ratio == 1, "Ratios must sum to 1"
+
+    np.random.seed(random_state)
+
+    n: int = len(y)
+    indices: np.ndarray = np.arange(n)
+    np.random.shuffle(indices)
+
+    X_shuffled = X[indices]
+    y_shuffled = y[indices]
+
+    train_size: int = int(n * train_ratio)
+    val_size: int = int(n * val_ratio)
+
+    X_train = X_shuffled[:train_size]
+    y_train = y_shuffled[:train_size]
+
+    X_val = X_shuffled[train_size : train_size + val_size]
+    y_val = y_shuffled[train_size : train_size + val_size]
+
+    X_test = X_shuffled[train_size + val_size :]
+    y_test = y_shuffled[train_size + val_size :]
+
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
+def standard_scaler(
+    X_train: np.ndarray, X_val: np.ndarray, X_test: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Scales the input features of the dataset using the standard scaler.
+
+    Args:
+        X_train (np.ndarray): The training set
+        X_val (np.ndarray): The validation set
+        X_test (np.ndarray): The testing set
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray, np.ndarray]: The scaled training, validation, and testing sets
+    """
+
+    mean: np.ndarray = np.mean(X_train, axis=0)
+    std: np.ndarray = np.std(X_train, axis=0)
+
+    X_train_scaled: np.ndarray = (X_train - mean) / std
+    X_val_scaled: np.ndarray = (X_val - mean) / std
+    X_test_scaled: np.ndarray = (X_test - mean) / std
+
+    return X_train_scaled, X_val_scaled, X_test_scaled
+
+
+X_train, X_val, X_test, y_train, y_val, y_test = split_dataset(
+    X.values, y.values, train_ratio=0.6, val_ratio=0.2, test_ratio=0.2
 )
 
-X_train_gd: np.ndarray = np.c_[np.ones(X_train.shape[0]), X_train]
-y_train_gd: np.ndarray = y_train.values
+X_train_scaled, X_val_scaled, X_test_scaled = standard_scaler(X_train, X_val, X_test)
 
-alpha: float = 0.003
-epochs: int = 2000
+# bias terms
+X_train_scaled = np.c_[np.ones(len(X_train_scaled)), X_train_scaled]
+X_val_scaled = np.c_[np.ones(len(X_val_scaled)), X_val_scaled]
+X_test_scaled = np.c_[np.ones(len(X_test_scaled)), X_test_scaled]
 
-theta, loss = gradient_descent(X_train_gd, y_train_gd, alpha, epochs)
-y_pred_gd: np.ndarray = X_test.dot(theta[1:]) + theta[0]
-mse_gd: float = mse(y_test.to_numpy(), y_pred_gd.to_numpy())
-r2_gd: float = r2(y_test.to_numpy(), y_pred_gd.to_numpy())
+alpha: float = 0.01
+epochs: int = 1000
 
-print(f"Mean Squared Error: {mse_gd:.4f}")
-print(f"R^2 Score: {r2_gd:.4f}")
+theta, loss = gradient_descent(X_train_scaled, y_train, alpha, epochs)
 
-import seaborn as sns
+y_pred_val = X_val_scaled.dot(theta)
+y_pred_test = X_test_scaled.dot(theta)
+
+print(f"\nValidation MSE: {mse(y_val, y_pred_val)}")
+print(f"Validation R^2: {r2(y_val, y_pred_val)}")
+
+print(f"Test MSE: {mse(y_test, y_pred_test)}")
+print(f"Test R^2: {r2(y_test, y_pred_test)}")
+
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-sns.set_style("darkgrid")
-plt.rcParams["figure.figsize"] = [24, 8]
+fig, ax = plt.subplots(1, 2, figsize=(15, 5))
 
-fig, ax = plt.subplots(1, 3, figsize=(24, 8))
-fig.suptitle("PCA and Linear Regression Analysis", fontsize=24)
-
-# Loss curve
-sns.lineplot(x=range(len(loss)), y=loss, ax=ax[0])
-ax[0].set_title("Loss vs. Epochs", fontsize=16)
+ax[0].plot(np.arange(epochs), loss, linewidth=2)
+ax[0].set_title("Loss vs Epochs", fontsize=15)
 ax[0].set_xlabel("Epochs")
 ax[0].set_ylabel("Loss")
 
-# Actual vs predicted total power (gradient descent)
-sns.scatterplot(x=y_test, y=y_pred_gd, ax=ax[1])
-ax[1].plot([y.min(), y.max()], [y.min(), y.max()], "k--", lw=4)
-ax[1].set_title("Actual vs Predicted (Gradient Descent)", fontsize=16)
-ax[1].set_xlabel("Actual Total Power")
-ax[1].set_ylabel("Predicted Total Power")
+sns.scatterplot(x=y_test, y=y_pred_test, alpha=0.7, s=50, ax=ax[1])
+sns.lineplot(x=y_test, y=y_test, color="red", ax=ax[1])
+ax[1].set_title("True vs Predicted Values")
+ax[1].set_xlabel("True Values")
+ax[1].set_ylabel("Predicted Values")
 
-# Residuals plot
-residuals_gd = y_test - y_pred_gd
-
-sns.scatterplot(x=y_pred_gd, y=residuals_gd, ax=ax[2])
-ax[2].axhline(y=0, color="r", linestyle="--")
-ax[2].set_title("Residuals Plot (Gradient Descent)", fontsize=16)
-ax[2].set_xlabel("Predicted Total Power")
-ax[2].set_ylabel("Residuals")
-
-plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 plt.show()
