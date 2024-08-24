@@ -85,7 +85,7 @@ def gradient_descent(
     y_train: np.ndarray,
     X_val: np.ndarray,
     y_val: np.ndarray,
-    lr: float,
+    alpha: float,
     epochs: int,
     early_stopping_rounds: int = 50,
     min_delta: float = 1e-4,
@@ -101,10 +101,12 @@ def gradient_descent(
         y_train (np.ndarray): The true values of the training dataset
         X_val (np.ndarray): The input features of the validation dataset
         y_val (np.ndarray): The true values of the validation dataset
-        lr (float): The learning rate of the algorithm
+        alpha (float): The learning rate of the algorithm
         epochs (int): The maximum number of iterations to run the algorithm
-        early_stopping_rounds (int): Number of epochs with no improvement after which training will be stopped
-        min_delta (float): Minimum change in validation loss to qualify as an improvement
+        early_stopping_rounds (int): Number of epochs with no improvement
+                                     after which training will be stopped
+        min_delta (float): Minimum change in validation loss to qualify as
+                           an improvement
 
     Returns:
         Tuple[np.ndarray, np.ndarray, np.ndarray, int]: The optimal weights of the model,
@@ -139,7 +141,7 @@ def gradient_descent(
             return best_theta, train_loss[: i + 1], val_loss[: i + 1], i + 1
 
         gradient: np.ndarray = (1 / m) * X_train.T.dot((y_pred_train - y_train))
-        theta -= lr * gradient
+        theta -= alpha * gradient
 
     return theta, train_loss, val_loss, epochs
 
