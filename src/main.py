@@ -204,15 +204,16 @@ X_test_scaled = np.c_[np.ones(len(X_test_scaled)), X_test_scaled]
 alpha: float = 0.01
 epochs: int = 1000
 
+theta = np.zeros(X_train_scaled.shape[1])
 theta, loss = gradient_descent(X_train_scaled, y_train, alpha, epochs)
 
+y_train_pred = X_train_scaled.dot(theta)
 y_pred_val = X_val_scaled.dot(theta)
 y_pred_test = X_test_scaled.dot(theta)
 
-print(f"\nValidation MSE: {mse(y_val, y_pred_val)}")
+print("\n Results")
+print(f"Training R^2: {r2(y_train, y_train_pred)}")
 print(f"Validation R^2: {r2(y_val, y_pred_val)}")
-
-print(f"Test MSE: {mse(y_test, y_pred_test)}")
 print(f"Test R^2: {r2(y_test, y_pred_test)}")
 
 import matplotlib.pyplot as plt
