@@ -81,36 +81,67 @@ def r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 @jit(nopython=True)
 def gradient_descent(
-    X: np.ndarray, y: np.ndarray, lr: float, epochs: int
-) -> Tuple[np.ndarray, np.ndarray]:
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    lr: float,
+    epochs: int,
+    early_stopping_rounds: int = 50,
+    min_delta: float = 1e-4,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """
     Calculates the optimal weights for a linear regression model using
-    gradient descent algorithm.
+    gradient descent algorithm with validation.
 
     Uses the mean squared error as the loss function to minimize.
 
     Args:
-        X (np.ndarray): The input features of the dataset
-        y (np.ndarray): The true values of the dataset
+        X_train (np.ndarray): The input features of the training dataset
+        y_train (np.ndarray): The true values of the training dataset
+        X_val (np.ndarray): The input features of the validation dataset
+        y_val (np.ndarray): The true values of the validation dataset
         lr (float): The learning rate of the algorithm
-        epochs (int): The number of iterations to run the algorithm
+        epochs (int): The maximum number of iterations to run the algorithm
+        early_stopping_rounds (int): Number of epochs with no improvement after which training will be stopped
+        min_delta (float): Minimum change in validation loss to qualify as an improvement
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: The optimal weights of the model and the loss  at each epoch
+        Tuple[np.ndarray, np.ndarray, np.ndarray, int]: The optimal weights of the model,
+        the training loss at each epoch, the validation loss at each epoch, and the number of epochs trained
     """
-
-    m, n = X.shape
+    m, n = X_train.shape
     theta: np.ndarray = np.zeros(n)
-    loss: np.ndarray = np.zeros(epochs)
+    train_loss: np.ndarray = np.zeros(epochs)
+    val_loss: np.ndarray = np.zeros(epochs)
+
+    best_val_loss = np.inf
+    epochs_no_improve = 0
+    best_theta = theta.copy()
 
     for i in range(epochs):
-        y_pred = X.dot(theta)
-        loss[i] = mse(y, y_pred)
+        y_pred_train = X_train.dot(theta)
+        train_loss[i] = mse(y_train, y_pred_train)
 
-        gradient: np.ndarray = (1 / m) * X.T.dot((y_pred - y))
+        y_pred_val = X_val.dot(theta)
+        val_loss[i] = mse(y_val, y_pred_val)
+
+        if val_loss[i] < best_val_loss - min_delta:
+            best_val_loss = val_loss[i]
+            epochs_no_improve = 0
+            best_theta = theta.copy()
+
+        else:
+            epochs_no_improve += 1
+
+        if epochs_no_improve == early_stopping_rounds:
+            print(f"Early stopping triggered at epoch {i+1}")
+            return best_theta, train_loss[: i + 1], val_loss[: i + 1], i + 1
+
+        gradient: np.ndarray = (1 / m) * X_train.T.dot((y_pred_train - y_train))
         theta -= lr * gradient
 
-    return theta, loss
+    return theta, train_loss, val_loss, epochs
 
 
 def split_dataset(
@@ -203,9 +234,20 @@ X_test_scaled = np.c_[np.ones(len(X_test_scaled)), X_test_scaled]
 
 alpha: float = 0.01
 epochs: int = 1000
+early_stopping_rounds: int = 50
+min_delta: float = 1e-4
 
 theta = np.zeros(X_train_scaled.shape[1])
-theta, loss = gradient_descent(X_train_scaled, y_train, alpha, epochs)
+theta, train_loss, val_loss, epochs_trained = gradient_descent(
+    X_train_scaled,
+    y_train,
+    X_val_scaled,
+    y_val,
+    alpha,
+    epochs,
+    early_stopping_rounds,
+    min_delta,
+)
 
 y_train_pred = X_train_scaled.dot(theta)
 y_pred_val = X_val_scaled.dot(theta)
@@ -221,10 +263,12 @@ import seaborn as sns
 
 fig, ax = plt.subplots(1, 2, figsize=(15, 5))
 
-ax[0].plot(np.arange(epochs), loss, linewidth=2)
+ax[0].plot(np.arange(epochs_trained), train_loss, label="Training Loss", linewidth=2)
+ax[0].plot(np.arange(epochs_trained), val_loss, label="Validation Loss", linewidth=2)
 ax[0].set_title("Loss vs Epochs", fontsize=15)
 ax[0].set_xlabel("Epochs")
 ax[0].set_ylabel("Loss")
+ax[0].legend()
 
 sns.scatterplot(x=y_test, y=y_pred_test, alpha=0.7, s=50, ax=ax[1])
 sns.lineplot(x=y_test, y=y_test, color="red", ax=ax[1])
