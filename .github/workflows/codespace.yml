@@ -53,7 +53,7 @@ jobs:
           mkdir -p .devcontainer
           cat > .devcontainer/devcontainer.json <<EOL
           {
-            "name": "Wave Energy Analysis",
+            "name": "AI CodeSpace",
             "image": "ghcr.io/${GITHUB_REPOSITORY}:main",
             "extensions": [
               "ms-python.python",
