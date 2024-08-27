@@ -1,7 +1,10 @@
 {
-  "name": "Wave Energy Analysis",
-  "image": "ghcr.io/salgue441/manual-regression-algorithm:main",
-  "extensions": ["ms-python.python", "ms-toolsai.jupyter"],
+  "name": "AI CodeSpace",
+  "image": "ghcr.io/salgue441/artificial-intelligence:main",
+  "extensions": [
+    "ms-python.python",
+    "ms-toolsai.jupyter"
+  ],
   "forwardPorts": [8000],
   "postCreateCommand": "pip install pytest"
 }
