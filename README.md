@@ -4,6 +4,10 @@
 
 ## Projects
 
+### Documentation
+
+The analysis of both projects can be found in the `docs` directory. The `ml_portfolio.pdf` file contains the documentation for the Linear Regression project, while the `cnn.pdf` file contains the documentation for the Neural Network project.
+
 ### Linear Regression
 
 #### Data Source
@@ -23,6 +27,4 @@ or in the codespace configured in this repository.
 
 ### Neural Network
 
-### Documentation
-
-The analysis of both projects can be found in the `docs` directory.
+The "Intel Image Classification" dataset, obtained from the Intel Image Classification Challenge on Analytics Vidhya, forms the foundation of this analysis. This dataset comprises 25,000 images, each representing a unique scene from a natural environment. The dataset is divided into three categories: training, testing, and validation.
