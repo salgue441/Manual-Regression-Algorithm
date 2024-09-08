@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "Regression",
+      "path": "regression"
+    },
+    {
+      "name": "Neural Network",
+      "path": "neural-network"
+    }
+  ],
+  "settings": {}
+}
